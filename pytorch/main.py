@@ -150,7 +150,7 @@ def test(args, io):
     #Try to load models
     model = DGCNN(args).to(device)
     model = nn.DataParallel(model)
-    model.load_state_dict(torch.load(args.model_path))
+    model.load_state_dict(torch.load(args.model_path, map_location=device))
     model = model.eval()
     test_acc = 0.0
     count = 0.0

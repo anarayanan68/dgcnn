@@ -80,8 +80,66 @@ class ModelNet40(Dataset):
         return self.data.shape[0]
 
 
+class ModelNet10(Dataset):
+    def __init__(self, partition='train', label_str_to_idx=None):
+        self.vertices, self.faces, self.label, self.label_str_to_idx = self.load_OFF_data(partition, label_str_to_idx)
+        self.label_idx_to_str = {v:k for k,v in self.label_str_to_idx.items()}
+        # self.vertices = self.vertices[np.random.choice(len(self), min(len(self),200), replace=False)]
+        self.partition = partition        
+
+    def __getitem__(self, item):
+        pointcloud = self.vertices[item]
+        faces = self.faces[item]
+        label = self.label[item]
+        # if self.partition == 'train':
+        #     pointcloud = translate_pointcloud(pointcloud)
+        #     np.random.shuffle(pointcloud)
+        return pointcloud, faces, label
+
+    def __len__(self):
+        return len(self.vertices)
+
+    def load_OFF_data(self, partition, label_str_to_idx=None):
+        if label_str_to_idx is None:
+            label_str_to_idx = {}
+        next_idx = 0
+        def read_off(fpath):
+            with open(fpath, 'r') as file:
+                if 'OFF' != file.readline().strip():
+                    raise('Not a valid OFF header')
+
+                n_verts, n_faces, __ = tuple([int(s) for s in file.readline().strip().split(' ')])
+                verts = [[float(s) for s in file.readline().strip().split(' ')] for i_vert in range(n_verts)]
+                faces = [[int(s) for s in file.readline().strip().split(' ')][1:] for i_face in range(n_faces)]
+                return np.array(verts), np.array(faces)
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.join(base_dir, 'data')
+        all_verts = []
+        all_faces = []
+        all_label = []
+        for fpath in glob.glob(os.path.join(data_dir, 'ModelNet10', '*', partition, '*.off')):
+            label_str = os.path.basename(os.path.dirname(os.path.dirname(fpath)))
+            if label_str not in label_str_to_idx:
+                label_str_to_idx[label_str] = next_idx
+                next_idx += 1
+            label = label_str_to_idx[label_str]
+
+            verts, faces = read_off(fpath)
+            all_verts.append(verts)
+            all_faces.append(faces)
+            all_label.append(label)
+
+        return all_verts, all_faces, all_label, label_str_to_idx
+
+
 if __name__ == '__main__':
-    train = ModelNet40(1024)
-    test = ModelNet40(1024, 'test')
-    for idx, (data, label) in enumerate(train):
-        print(idx, data.shape, label)
+    # train = ModelNet40(1024)
+    # test = ModelNet40(1024, 'test')
+    # for idx, (data, label) in enumerate(train):
+    #     print(idx, data.shape, label)
+
+    train = ModelNet10()
+    test = ModelNet10('test', train.label_str_to_idx)
+    for idx, (verts, faces, label) in enumerate(train):
+        print(idx, verts.shape, verts[:3], faces.shape, faces[:3], label, train.label_idx_to_str[label])

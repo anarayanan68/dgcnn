@@ -31,10 +31,16 @@ def _init_():
         os.makedirs('checkpoints/'+args.exp_name)
     if not os.path.exists('checkpoints/'+args.exp_name+'/'+'models'):
         os.makedirs('checkpoints/'+args.exp_name+'/'+'models')
-    os.system('cp main.py checkpoints'+'/'+args.exp_name+'/'+'main.py.backup')
-    os.system('cp model.py checkpoints' + '/' + args.exp_name + '/' + 'model.py.backup')
-    os.system('cp util.py checkpoints' + '/' + args.exp_name + '/' + 'util.py.backup')
-    os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
+
+    import shutil
+    shutil.copy('./main.py', './checkpoints'+'/'+args.exp_name+'/'+'main.py.backup')
+    shutil.copy('./model.py', './checkpoints' + '/' + args.exp_name + '/' + 'model.py.backup')
+    shutil.copy('./util.py', './checkpoints' + '/' + args.exp_name + '/' + 'util.py.backup')
+    shutil.copy('./data.py', './checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
+    # os.system('cp main.py checkpoints'+'/'+args.exp_name+'/'+'main.py.backup')
+    # os.system('cp model.py checkpoints' + '/' + args.exp_name + '/' + 'model.py.backup')
+    # os.system('cp util.py checkpoints' + '/' + args.exp_name + '/' + 'util.py.backup')
+    # os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
 
 def train(args, io):
     train_loader = DataLoader(ModelNet40(partition='train', num_points=args.num_points), num_workers=8,

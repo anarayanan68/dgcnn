@@ -12,6 +12,8 @@ import os
 import sys
 import glob
 import h5py
+import pickle
+import tqdm
 import numpy as np
 from torch.utils.data import Dataset
 
@@ -80,10 +82,66 @@ class ModelNet40(Dataset):
         return self.data.shape[0]
 
 
+def read_OFF(fpath):
+    with open(fpath, 'r') as file:
+        if 'OFF' != file.readline().strip():
+            raise('Not a valid OFF header')
+
+        n_verts, n_faces, __ = tuple([int(s) for s in file.readline().strip().split(' ')])
+        verts = [[float(s) for s in file.readline().strip().split(' ')] for i_vert in range(n_verts)]
+        faces = [[int(s) for s in file.readline().strip().split(' ')][1:] for i_face in range(n_faces)]
+        return np.array(verts), np.array(faces)
+
+
+def modelnet10_OFF_preproc(partition, out_pkl_path=None, mn10_dir=None):
+    if mn10_dir is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        mn10_dir = os.path.join(base_dir, 'data', 'ModelNet10')
+
+    if out_pkl_path is None:
+        out_pkl_path = os.path.join(mn10_dir, f'preprocessed_data__{partition}.pkl')
+    if os.path.isfile(out_pkl_path):
+        print(f"Reusing preprocessed file: {out_pkl_path}")
+        return out_pkl_path  # don't change existing preprocessed data
+
+
+    print(f"Creating data file: {out_pkl_path}")
+    data = {key: [] for key in ["vertices", "faces", "label"]}
+    label_str_to_idx = {}
+    next_idx = 0
+    for basename in sorted(os.listdir(mn10_dir)):   # sort to have fixed order of labels
+        dirpath = os.path.join(mn10_dir, basename)
+        if os.path.isdir(dirpath):
+            label_str_to_idx[basename] = next_idx
+            next_idx += 1
+
+            for fpath in tqdm.tqdm(
+                glob.glob(os.path.join(dirpath, partition, '*.off')),
+                desc=f"Label: {basename}"
+                ):
+                vertices, faces = read_OFF(fpath)
+                data["vertices"].append(vertices)
+                data["faces"].append(faces)
+                data["label"].append(label_str_to_idx[basename])
+
+    data['label_str_to_idx'] = label_str_to_idx
+    data['label_idx_to_str'] = {v:k for k,v in label_str_to_idx.items()}
+
+    with open(out_pkl_path, 'wb') as pf:
+        pickle.dump(data, pf)
+
+    return out_pkl_path
+
+
 class ModelNet10(Dataset):
-    def __init__(self, partition='train', label_str_to_idx=None):
-        self.vertices, self.faces, self.label, self.label_str_to_idx = self.load_OFF_data(partition, label_str_to_idx)
-        self.label_idx_to_str = {v:k for k,v in self.label_str_to_idx.items()}
+    def __init__(self, partition='train', mn10_dir=None, pkl_path=None):
+        pkl_path = modelnet10_OFF_preproc(partition, out_pkl_path=pkl_path, mn10_dir=mn10_dir)
+
+        with open(pkl_path, 'rb') as pf:
+            data = pickle.load(pf)
+            self.vertices, self.faces, self.label = data["vertices"], data["faces"], data["label"]
+            self.label_str_to_idx, self.label_idx_to_str = data['label_str_to_idx'], data['label_idx_to_str']
+
         # self.vertices = self.vertices[np.random.choice(len(self), min(len(self),200), replace=False)]
         self.partition = partition        
 
@@ -99,47 +157,26 @@ class ModelNet10(Dataset):
     def __len__(self):
         return len(self.vertices)
 
-    def load_OFF_data(self, partition, label_str_to_idx=None):
-        if label_str_to_idx is None:
-            label_str_to_idx = {}
-        next_idx = 0
-        def read_off(fpath):
-            with open(fpath, 'r') as file:
-                if 'OFF' != file.readline().strip():
-                    raise('Not a valid OFF header')
-
-                n_verts, n_faces, __ = tuple([int(s) for s in file.readline().strip().split(' ')])
-                verts = [[float(s) for s in file.readline().strip().split(' ')] for i_vert in range(n_verts)]
-                faces = [[int(s) for s in file.readline().strip().split(' ')][1:] for i_face in range(n_faces)]
-                return np.array(verts), np.array(faces)
-
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.join(base_dir, 'data')
-        all_verts = []
-        all_faces = []
-        all_label = []
-        for fpath in glob.glob(os.path.join(data_dir, 'ModelNet10', '*', partition, '*.off')):
-            label_str = os.path.basename(os.path.dirname(os.path.dirname(fpath)))
-            if label_str not in label_str_to_idx:
-                label_str_to_idx[label_str] = next_idx
-                next_idx += 1
-            label = label_str_to_idx[label_str]
-
-            verts, faces = read_off(fpath)
-            all_verts.append(verts)
-            all_faces.append(faces)
-            all_label.append(label)
-
-        return all_verts, all_faces, all_label, label_str_to_idx
-
-
 if __name__ == '__main__':
     # train = ModelNet40(1024)
     # test = ModelNet40(1024, 'test')
     # for idx, (data, label) in enumerate(train):
     #     print(idx, data.shape, label)
 
-    train = ModelNet10()
-    test = ModelNet10('test', train.label_str_to_idx)
-    for idx, (verts, faces, label) in enumerate(train):
-        print(idx, verts.shape, verts[:3], faces.shape, faces[:3], label, train.label_idx_to_str[label])
+    print("=== TRAIN ===")
+    train = ModelNet10('train')
+    idxs = np.random.choice(len(train), 10)
+    for idx in idxs:
+        vertices, faces, label = train[idx]
+        print(idx, label, train.label_idx_to_str[label], '\n',
+        vertices.shape, vertices[:3], '\n',
+        faces.shape, faces[:3])
+
+    print("=== TEST ===")
+    test = ModelNet10('test')
+    idxs = np.random.choice(len(test), 10)
+    for idx in idxs:
+        vertices, faces, label = test[idx]
+        print(idx, label, test.label_idx_to_str[label], '\n',
+        vertices.shape, vertices[:3], '\n',
+        faces.shape, faces[:3])

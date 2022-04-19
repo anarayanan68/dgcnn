@@ -54,7 +54,7 @@ def get_graph_feature(x, k=20, idx=None):
 
 
 class PointNet(nn.Module):
-    def __init__(self, args, output_channels=40):
+    def __init__(self, args):
         super(PointNet, self).__init__()
         self.args = args
         self.conv1 = nn.Conv1d(3, 64, kernel_size=1, bias=False)
@@ -70,7 +70,7 @@ class PointNet(nn.Module):
         self.linear1 = nn.Linear(args.emb_dims, 512, bias=False)
         self.bn6 = nn.BatchNorm1d(512)
         self.dp1 = nn.Dropout()
-        self.linear2 = nn.Linear(512, output_channels)
+        self.linear2 = nn.Linear(512, args.output_channels)
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -86,7 +86,7 @@ class PointNet(nn.Module):
 
 
 class DGCNN(nn.Module):
-    def __init__(self, args, output_channels=40):
+    def __init__(self, args):
         super(DGCNN, self).__init__()
         self.args = args
         self.k = args.k
@@ -118,7 +118,7 @@ class DGCNN(nn.Module):
         self.linear2 = nn.Linear(512, 256)
         self.bn7 = nn.BatchNorm1d(256)
         self.dp2 = nn.Dropout(p=args.dropout)
-        self.linear3 = nn.Linear(256, output_channels)
+        self.linear3 = nn.Linear(256, args.output_channels)
 
     def forward(self, x):
         batch_size = x.size(0)

@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from data import ModelNet40
+from data import ModelNet40, ModelNet10, SHREC16
 from model import PointNet, DGCNN
 import numpy as np
 from torch.utils.data import DataLoader
@@ -42,10 +42,23 @@ def _init_():
     # os.system('cp util.py checkpoints' + '/' + args.exp_name + '/' + 'util.py.backup')
     # os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
 
+
+DATASET_ARG_TO_CLASS = {
+    'modelnet40': ModelNet40,
+    'modelnet10': ModelNet10,
+    'shrec16': SHREC16
+}
+
+
+def get_dataset(args, partition):
+    ds_cls = DATASET_ARG_TO_CLASS[args.dataset]
+    return ds_cls(partition=partition, num_points=args.num_points)
+
+
 def train(args, io):
-    train_loader = DataLoader(ModelNet40(partition='train', num_points=args.num_points), num_workers=8,
+    train_loader = DataLoader(get_dataset(args, partition='train'), num_workers=8,
                               batch_size=args.batch_size, shuffle=True, drop_last=True)
-    test_loader = DataLoader(ModelNet40(partition='test', num_points=args.num_points), num_workers=8,
+    test_loader = DataLoader(get_dataset(args, partition='test'), num_workers=8,
                              batch_size=args.test_batch_size, shuffle=True, drop_last=False)
 
     device = torch.device("cuda" if args.cuda else "cpu")
@@ -142,7 +155,7 @@ def train(args, io):
 
 
 def test(args, io):
-    test_loader = DataLoader(ModelNet40(partition='test', num_points=args.num_points),
+    test_loader = DataLoader(get_dataset(args, partition='test'),
                              batch_size=args.test_batch_size, shuffle=True, drop_last=False)
 
     device = torch.device("cuda" if args.cuda else "cpu")
@@ -182,7 +195,9 @@ if __name__ == "__main__":
                         choices=['pointnet', 'dgcnn'],
                         help='Model to use, [pointnet, dgcnn]')
     parser.add_argument('--dataset', type=str, default='modelnet40', metavar='N',
-                        choices=['modelnet40'])
+                        choices=list(DATASET_ARG_TO_CLASS.keys()))
+    parser.add_argument('--output_channels', type=int, default=40,
+                        help='num of output channels, i.e. num of possible classes')
     parser.add_argument('--batch_size', type=int, default=32, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--test_batch_size', type=int, default=16, metavar='batch_size',

@@ -157,14 +157,116 @@ class ModelNet10(Dataset):
     def __len__(self):
         return len(self.vertices)
 
+
+def read_OBJ(fpath):
+    with open(fpath, 'r') as file:
+        verts = []
+        faces = []
+        for line in file:
+            line = line.strip()
+            if line == '' or line.startswith('#'):
+                continue
+
+            lsp = line.split()
+            if lsp[0] == 'v':
+                verts.append([float(w) for w in lsp[1:]])
+            elif lsp[0] == 'f':
+                faces.append([(int(w)-1) for w in lsp[1:]])
+        return np.array(verts), np.array(faces)
+
+
+def shrec16_OBJ_preproc(partition, out_pkl_path=None, data_root_dir=None):
+    if data_root_dir is None:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_root_dir = os.path.join(base_dir, 'data', 'shrec_16')
+
+    if out_pkl_path is None:
+        out_pkl_path = os.path.join(data_root_dir, f'preprocessed_data__{partition}.pkl')
+    if os.path.isfile(out_pkl_path):
+        print(f"Reusing preprocessed file: {out_pkl_path}")
+        return out_pkl_path  # don't change existing preprocessed data
+
+
+    print(f"Creating data file: {out_pkl_path}")
+    data = {key: [] for key in ["vertices", "faces", "label"]}
+    label_str_to_idx = {}
+    next_idx = 0
+    for basename in sorted(os.listdir(data_root_dir)):   # sort to have fixed order of labels
+        dirpath = os.path.join(data_root_dir, basename)
+        if os.path.isdir(dirpath):
+            label_str_to_idx[basename] = next_idx
+            next_idx += 1
+
+            for fpath in tqdm.tqdm(
+                glob.glob(os.path.join(dirpath, partition, '*.obj')),
+                desc=f"Label: {basename}"
+                ):
+                vertices, faces = read_OBJ(fpath)
+                data["vertices"].append(vertices)
+                data["faces"].append(faces)
+                data["label"].append(label_str_to_idx[basename])
+
+    data['label_str_to_idx'] = label_str_to_idx
+    data['label_idx_to_str'] = {v:k for k,v in label_str_to_idx.items()}
+
+    with open(out_pkl_path, 'wb') as pf:
+        pickle.dump(data, pf)
+
+    return out_pkl_path
+
+
+
+class SHREC16(Dataset):
+    def __init__(self, partition='train', data_root_dir=None, pkl_path=None):
+        pkl_path = shrec16_OBJ_preproc(partition, out_pkl_path=pkl_path, data_root_dir=data_root_dir)
+
+        with open(pkl_path, 'rb') as pf:
+            data = pickle.load(pf)
+            self.vertices, self.faces, self.label = data["vertices"], data["faces"], data["label"]
+            self.label_str_to_idx, self.label_idx_to_str = data['label_str_to_idx'], data['label_idx_to_str']
+
+        # self.vertices = self.vertices[np.random.choice(len(self), min(len(self),200), replace=False)]
+        self.partition = partition        
+
+    def __getitem__(self, item):
+        pointcloud = self.vertices[item]
+        faces = self.faces[item]
+        label = self.label[item]
+        # if self.partition == 'train':
+        #     pointcloud = translate_pointcloud(pointcloud)
+        #     np.random.shuffle(pointcloud)
+        return pointcloud, faces, label
+
+    def __len__(self):
+        return len(self.vertices)
+
+
 if __name__ == '__main__':
     # train = ModelNet40(1024)
     # test = ModelNet40(1024, 'test')
     # for idx, (data, label) in enumerate(train):
     #     print(idx, data.shape, label)
 
-    print("=== TRAIN ===")
-    train = ModelNet10('train')
+    # print("=== TRAIN: ModelNet10 ===")
+    # train = ModelNet10('train')
+    # idxs = np.random.choice(len(train), 10)
+    # for idx in idxs:
+    #     vertices, faces, label = train[idx]
+    #     print(idx, label, train.label_idx_to_str[label], '\n',
+    #     vertices.shape, vertices[:3], '\n',
+    #     faces.shape, faces[:3])
+
+    # print("=== TEST: ModelNet10 ===")
+    # test = ModelNet10('test')
+    # idxs = np.random.choice(len(test), 10)
+    # for idx in idxs:
+    #     vertices, faces, label = test[idx]
+    #     print(idx, label, test.label_idx_to_str[label], '\n',
+    #     vertices.shape, vertices[:3], '\n',
+    #     faces.shape, faces[:3])
+
+    print("=== TRAIN: SHREC16 ===")
+    train = SHREC16('train')
     idxs = np.random.choice(len(train), 10)
     for idx in idxs:
         vertices, faces, label = train[idx]
@@ -172,11 +274,24 @@ if __name__ == '__main__':
         vertices.shape, vertices[:3], '\n',
         faces.shape, faces[:3])
 
-    print("=== TEST ===")
-    test = ModelNet10('test')
+    print("=== TEST: SHREC16 ===")
+    test = SHREC16('test')
     idxs = np.random.choice(len(test), 10)
     for idx in idxs:
         vertices, faces, label = test[idx]
         print(idx, label, test.label_idx_to_str[label], '\n',
         vertices.shape, vertices[:3], '\n',
         faces.shape, faces[:3])
+
+    # vertices, faces, label = test[0]
+    # with open('test.off', 'w') as file:
+    #     file.write('OFF\n')
+    #     file.write(f'{len(vertices)} {len(faces)} 0\n')
+    #     file.writelines([
+    #         ( ' '.join([str(coord) for coord in v]) + '\n' )
+    #         for v in vertices
+    #     ])
+    #     file.writelines([
+    #         ( str(len(f)) + ' ' + ' '.join([str(idx) for idx in f]) + '\n' )
+    #         for f in faces
+    #     ])

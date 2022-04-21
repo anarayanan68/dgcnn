@@ -195,7 +195,7 @@ def shrec16_OBJ_preproc(partition, out_pkl_path=None, data_root_dir=None):
     for basename in sorted(os.listdir(data_root_dir)):   # sort to have fixed order of labels
         dirpath = os.path.join(data_root_dir, basename)
         if os.path.isdir(dirpath):
-            label_str_to_idx[basename] = np.array(next_idx, dtype='int64')
+            label_str_to_idx[basename] = next_idx
             next_idx += 1
 
             for fpath in tqdm.tqdm(

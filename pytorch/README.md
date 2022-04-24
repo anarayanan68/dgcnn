@@ -3,6 +3,9 @@
 ## Point Cloud Classification
 * Run the training script:
 
+``` 250 points shrec16
+python main.py --exp_name=dgcnn_lr_0.01 --model=dgcnn --num_points=250 --k=10 --use_sgd=True --dataset=shrec16 --epochs=100 --lr=0.01
+```
 
 ``` 1024 points
 python main.py --exp_name=dgcnn_1024 --model=dgcnn --num_points=1024 --k=20 --use_sgd=True
